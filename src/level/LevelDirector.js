@@ -52,7 +52,7 @@
             );
 
             // add all defined layers
-            var layers = level.getLayers();
+            var layers = level.getChildByType(me.TMXLayer).concat(level.getChildByType(me.ImageLayer)).concat(level.getChildByType(me.ColorLayer));
             for (var i = layers.length; i--;) {
                 container.addChild(layers[i]);
             }
@@ -63,7 +63,7 @@
             var isCollisionGroup = false;
 
             // load all ObjectGroup and Object definition
-            var objectGroups = level.getObjectGroups();
+            var objectGroups = level.getChildByType(me.TMXObjectGroup);
 
             for (var g = 0; g < objectGroups.length; g++) {
                 var group = objectGroups[g];

@@ -57,26 +57,26 @@
 
             // check if a user-defined background color is defined
             if (map.backgroundcolor) {
-                map.mapLayers.push(
+                map.addChild(
                     new me.ColorLayer(
                         "background_color",
-                        map.backgroundcolor,
-                        zOrder++
-                    )
+                        map.backgroundcolor
+                    ),
+                    zOrder++
                 );
             }
 
             // check if a background image is defined
             if (map.background_image) {
                 // add a new image layer
-                map.mapLayers.push(new me.ImageLayer(
+                map.addChild(new me.ImageLayer(
                     0, 0, {
                         width : map.width,
                         height : map.height,
                         name : "background_image",
-                        image : map.background_image,
-                        z: zOrder++
-                    }
+                        image : map.background_image
+                    },
+                    zOrder++
                 ));
             }
 
@@ -109,16 +109,16 @@
                 data.layers.forEach(function (layer) {
                     switch (layer.type) {
                         case TMXConstants.TMX_TAG_IMAGE_LAYER :
-                            map.mapLayers.push(self.readImageLayer(map, layer, zOrder++));
+                            map.addChild(self.readImageLayer(map, layer), zOrder++);
                             break;
 
                         case TMXConstants.TMX_TAG_TILE_LAYER :
-                            map.mapLayers.push(self.readLayer(map, layer, zOrder++));
+                            map.addChild(self.readLayer(map, layer), zOrder++);
                             break;
 
                         // get the object groups information
                         case TMXConstants.TMX_TAG_OBJECTGROUP:
-                            map.objectGroups.push(self.readObjectGroup(map, layer, zOrder++));
+                            map.addChild(self.readObjectGroup(map, layer), zOrder++);
                             break;
 
                         default:
@@ -134,12 +134,12 @@
                 if (Array.isArray(layers) === true) {
                     layers.forEach(function (layer) {
                         // get the object information
-                        map.mapLayers.push(self.readLayer(map, layer, layer._draworder));
+                        map.addChild(self.readLayer(map, layer), layer._draworder);
                     });
                 }
                 else {
                     // get the object information
-                    map.mapLayers.push(self.readLayer(map, layers, layers._draworder));
+                    map.addChild(self.readLayer(map, layers), layers._draworder);
                 }
 
                 // in converted format, these are not under the generic layers structure
@@ -147,12 +147,12 @@
                     var groups = data[TMXConstants.TMX_TAG_OBJECTGROUP];
                     if (Array.isArray(groups) === true) {
                         groups.forEach(function (group) {
-                            map.objectGroups.push(self.readObjectGroup(map, group, group._draworder));
+                            map.addChild(self.readObjectGroup(map, group), group._draworder);
                         });
                     }
                     else {
                         // get the object information
-                        map.objectGroups.push(self.readObjectGroup(map, groups, groups._draworder));
+                        map.addChild(self.readObjectGroup(map, groups), groups._draworder);
                     }
                 }
 
@@ -161,11 +161,11 @@
                     var imageLayers = data[TMXConstants.TMX_TAG_IMAGE_LAYER];
                     if (Array.isArray(imageLayers) === true) {
                         imageLayers.forEach(function (imageLayer) {
-                            map.mapLayers.push(self.readImageLayer(map, imageLayer, imageLayer._draworder));
+                            map.addChild(self.readImageLayer(map, imageLayer), imageLayer._draworder);
                         });
                     }
                     else {
-                        map.mapLayers.push(self.readImageLayer(map, imageLayers, imageLayers._draworder));
+                        map.addChild(self.readImageLayer(map, imageLayers), imageLayers._draworder);
                     }
                 }
             }
