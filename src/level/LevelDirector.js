@@ -59,7 +59,7 @@
             });
             
             // add all Object instances
-            level.getObjects(false).forEach(function (object) {
+            level.getObjects(me.game.mergeGroup).forEach(function (object) {
                 targetContainer.addChild(object);
             });
 
@@ -77,13 +77,6 @@
 
             // update the game world size to match the level size
             targetContainer.resize(level.width, level.height);
-
-            // fire the callback if defined
-            if (me.game.onLevelLoaded) {
-                me.game.onLevelLoaded.call(me.game.onLevelLoaded, level.name);
-            }
-            //publish the corresponding message
-            me.event.publish(me.event.LEVEL_LOADED, [level.name]);
         };
 
         /*
@@ -139,6 +132,9 @@
          * @public
          * @function
          * @param {String} level level id
+         * @param {Object} options optional field
+         * @param {me.Container} [settings.container=me.game.world] container in which to load the specified level
+         * @param {function} [settings.onLoaded=me.game.onLevelLoaded] callback for when the level is fully loaded
          * @example
          * // the game defined ressources
          * // to be preloaded by the loader
@@ -155,13 +151,19 @@
          * // load a level
          * me.levelDirector.loadLevel("a4_level1");
          */
-        api.loadLevel = function (levelId) {
+        api.loadLevel = function (levelId, options) {
+            options = options || {};
+            var container = options.container || me.game.world;
+            var callback = options.callback || me.game.onLevelLoaded;
+            var level = levels[levelId];
+            
+            
             // throw an exception if not existing
-            if (typeof(levels[levelId]) === "undefined") {
+            if (typeof(level) === "undefined") {
                 throw new me.Error("level " + levelId + " not found");
             }
 
-            if (levels[levelId] instanceof me.TMXTileMap) {
+            if (level instanceof me.TMXTileMap) {
 
                 // check the status of the state mngr
                 var wasRunning = me.state.isRunning();
@@ -181,17 +183,25 @@
                 }
 
                 // parse the give TMX file into the give level
-                me.mapReader.readMap(levels[levelId], me.loader.getTMX(levelId));
+                me.mapReader.readMap(level, me.loader.getTMX(levelId));
 
                 // reset the GUID generator
                 // and pass the level id as parameter
-                me.utils.resetGUID(levelId, levels[levelId].nextobjectid);
+                me.utils.resetGUID(levelId, level.nextobjectid);
 
                 // update current level index
                 currentLevelIdx = levelIdx.indexOf(levelId);
 
                 // add the specified level to the game world
-                loadTMXLevel(levels[levelId], me.game.world);
+                loadTMXLevel(level, container);
+
+                //publish the corresponding message
+                me.event.publish(me.event.LEVEL_LOADED, [level.name]);
+                
+                // fire the callback if defined
+                if (typeof (callback) === "function") {
+                    callback.call(callback, level.name);
+                }
 
                 if (wasRunning) {
                     // resume the game loop if it was
