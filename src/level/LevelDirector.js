@@ -38,8 +38,10 @@
          * @function
          */
         var loadTMXLevel = function (level, container) {
+            var targetContainer = container; 
+            
             // disable auto-sort for the given container
-            container.autoSort = false;
+            targetContainer.autoSort = false;
 
             // load our map
             me.game.currentLevel = level;
@@ -51,109 +53,30 @@
                 Math.max(level.height, me.game.viewport.height)
             );
 
-            // add all defined layers
-            var layers = level.getChildByType(me.TMXLayer).concat(level.getChildByType(me.ImageLayer)).concat(level.getChildByType(me.ColorLayer));
-            for (var i = layers.length; i--;) {
-                container.addChild(layers[i]);
-            }
-
-            // game world as default container
-            var targetContainer = container;
-
-            var isCollisionGroup = false;
-
-            // load all ObjectGroup and Object definition
-            var objectGroups = level.getChildByType(me.TMXObjectGroup);
-
-            for (var g = 0; g < objectGroups.length; g++) {
-                var group = objectGroups[g];
-
-                // check if this is the collision shape group
-                isCollisionGroup = group.name.toLowerCase().contains(me.TMXConstants.COLLISION_GROUP);
-
-                if (me.game.mergeGroup === false) {
-                    // create a new container with Infinite size (?)
-                    // note: initial position and size seems to be meaningless in Tiled
-                    // https://github.com/bjorn/tiled/wiki/TMX-Map-Format :
-                    // x: Defaults to 0 and can no longer be changed in Tiled Qt.
-                    // y: Defaults to 0 and can no longer be changed in Tiled Qt.
-                    // width: The width of the object group in tiles. Meaningless.
-                    // height: The height of the object group in tiles. Meaningless.
-                    targetContainer = new me.Container();
-
-                    // set additional properties
-                    targetContainer.name = group.name;
-                    targetContainer.z = group.z;
-                    targetContainer.setOpacity(group.opacity);
-
-                    // disable auto-sort
-                    targetContainer.autoSort = false;
-                }
-
-                // iterate through the group and add all object into their
-                // corresponding target Container
-                for (var o = 0; o < group.objects.length; o++) {
-                    // TMX object settings
-                    var settings = group.objects[o];
-
-                    var obj = me.pool.pull(
-                        settings.name || "me.Entity",
-                        settings.x, settings.y,
-                        settings
-                    );
-
-                    // check if a me.Tile object is embedded
-                    if (typeof (settings.tile) === "object" && !obj.renderable) {
-                        obj.renderable = settings.tile.getRenderable(settings);
-                    }
-
-                    if (isCollisionGroup && !settings.name) {
-                        // configure the body accordingly
-                        obj.body.collisionType = me.collision.types.WORLD_SHAPE;
-                    }
-
-                    // ignore if the pull function does not return a corresponding object
-                    if (obj) {
-                        // set the obj z order correspondingly to its parent container/group
-                        obj.z = group.z;
-
-                        //apply group opacity value to the child objects if group are merged
-                        if (me.game.mergeGroup === true && obj.isRenderable === true) {
-                            obj.setOpacity(obj.getOpacity() * group.opacity);
-                            // and to child renderables if any
-                            if (obj.renderable instanceof me.Renderable) {
-                                obj.renderable.setOpacity(obj.renderable.getOpacity() * group.opacity);
-                            }
-                        }
-                        // add the obj into the target container
-                        targetContainer.addChild(obj);
-                    }
-                }
-
-                // if we created a new container
-                if (me.game.mergeGroup === false) {
-                    // add our container to the world
-                    container.addChild(targetContainer);
-
-                    // re-enable auto-sort
-                    targetContainer.autoSort = true;
-                }
-            }
+            // add all layers instances
+            level.getLayers().forEach(function (layer) {
+                targetContainer.addChild(layer);
+            });
+            
+            // add all Object instances
+            level.getObjects(false).forEach(function (object) {
+                targetContainer.addChild(object);
+            });
 
             // sort everything (recursively)
-            container.sort(true);
+            targetContainer.sort(true);
 
             // re-enable auto-sort
-            container.autoSort = true;
+            targetContainer.autoSort = true;
 
             // center map on the viewport
             level.moveToCenter();
 
             // translate the display if required
-            container.transform.translateV(level.pos);
+            targetContainer.transform.translateV(level.pos);
 
             // update the game world size to match the level size
-            container.resize(level.width, level.height);
+            targetContainer.resize(level.width, level.height);
 
             // fire the callback if defined
             if (me.game.onLevelLoaded) {
