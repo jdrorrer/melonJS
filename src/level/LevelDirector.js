@@ -34,10 +34,11 @@
          * @private
          * @param {me.TMXTileMap} level to be loaded
          * @param {me.Container} target container
+         * @param {boolean} flatten if true, flatten all objects into the given container
          * @ignore
          * @function
          */
-        var loadTMXLevel = function (level, container) {
+        var loadTMXLevel = function (level, container, flatten) {
             var targetContainer = container; 
             
             // disable auto-sort for the given container
@@ -59,7 +60,7 @@
             });
             
             // add all Object instances
-            level.getObjects(me.game.mergeGroup).forEach(function (object) {
+            level.getObjects(flatten).forEach(function (object) {
                 targetContainer.addChild(object);
             });
 
@@ -135,6 +136,7 @@
          * @param {Object} options optional field
          * @param {me.Container} [settings.container=me.game.world] container in which to load the specified level
          * @param {function} [settings.onLoaded=me.game.onLevelLoaded] callback for when the level is fully loaded
+         * @param {boolean} [flatten=me.game.mergeGroup] if true, flatten all objects into the given container
          * @example
          * // the game defined ressources
          * // to be preloaded by the loader
@@ -155,6 +157,7 @@
             options = options || {};
             var container = options.container || me.game.world;
             var callback = options.callback || me.game.onLevelLoaded;
+            var flatten = options.flatten || me.game.mergeGroup;
             var level = levels[levelId];
             
             
@@ -193,7 +196,7 @@
                 currentLevelIdx = levelIdx.indexOf(levelId);
 
                 // add the specified level to the game world
-                loadTMXLevel(level, container);
+                loadTMXLevel(level, container, flatten);
 
                 //publish the corresponding message
                 me.event.publish(me.event.LEVEL_LOADED, [level.name]);
