@@ -133,7 +133,7 @@
          * @public
          * @function
          * @param {String} level level id
-         * @param {Object} options optional parameters
+         * @param {Object} [options] additional optional parameters
          * @param {me.Container} [options.container=me.game.world] container in which to load the specified level
          * @param {function} [options.onLoaded=me.game.onLevelLoaded] callback for when the level is fully loaded
          * @param {boolean} [options.flatten=me.game.mergeGroup] if true, flatten all objects into the given container
