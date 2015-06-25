@@ -80,6 +80,44 @@
 
             this._super(me.Container, "init", [0, 0, 0, 0]);
         },
+
+        /**
+         * Add a child to the TMXTileMap <br>
+         * this function will only add an object reference, bypassing all activation events.
+         * @name addChild
+         * @memberOf me.TMXTileMap
+         * @function
+         * @param {me.Renderable} child
+         * @param {number} [z] forces the z index of the child to the specified value
+         * @return {me.Renderable} the added child
+         */
+        addChild : function (child, z) {
+            // change the child z-index if one is specified
+            if (typeof(z) === "number") {
+                child.z = z;
+            }
+            this.children.push(child);
+            return child;
+        },
+        
+        /**
+         * Removes a child from a TMXTileMap object
+         * @name removeChildNow
+         * @memberOf me.TMXTileMap
+         * @function
+         * @param {me.Renderable} child
+         */
+        removeChildNow : function (child) {
+            child.ancestor = undefined;
+
+            if (typeof child.onDeactivateEvent === "function") {
+                 child.onDeactivateEvent();
+            }
+            if (typeof (child.destroy) === "function") {
+                child.destroy();
+            }
+            this.children.splice(this.getChildIndex(child), 1);
+        },
         
         /**
          * return all the existing object group definition
@@ -247,11 +285,14 @@
          * @ignore
          */
         destroy : function () {
-            this._super(me.Container, "destroy");
-            // call parent reset function
-            this.tilesets = null;
-            this.pos.set(0, 0);
-            this.initialized = false;
+            if (this.initialized === true) {
+                // call parent reset function
+                this._super(me.Container, "destroy");
+                // reset other stuff
+                this.tilesets = null;
+                this.pos.set(0, 0);
+                this.initialized = false;
+            }
         }
     });
 })();
