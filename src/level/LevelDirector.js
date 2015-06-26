@@ -32,21 +32,23 @@
          * @name loadTMXLevel
          * @memberOf me.game
          * @private
-         * @param {me.TMXTileMap} level to be loaded
+         * @param {String} level level id
          * @param {me.Container} target container
          * @param {boolean} flatten if true, flatten all objects into the given container
          * @ignore
          * @function
          */
-        var loadTMXLevel = function (level, container, flatten) {
+        var loadTMXLevel = function (levelId, container, flatten) {
+            var level = levels[levelId];
             var targetContainer = container; 
             
             // disable auto-sort for the given container
             targetContainer.autoSort = false;
-
-            // load our map
-            me.game.currentLevel = level;
-
+            
+                
+            // parse the give TMX file into the give level
+            me.mapReader.readMap(level, me.loader.getTMX(levelId));
+            
             // change the viewport bounds
             me.game.viewport.setBounds(
                 0, 0,
@@ -54,6 +56,10 @@
                 Math.max(level.height, me.game.viewport.height)
             );
 
+            // reset the GUID generator
+            // and pass the level id as parameter
+            me.utils.resetGUID(levelId, level.nextobjectid);
+            
             // add all layers instances
             level.getLayers().forEach(function (layer) {
                 targetContainer.addChild(layer);
@@ -63,6 +69,9 @@
             level.getObjects(flatten).forEach(function (object) {
                 targetContainer.addChild(object);
             });
+            
+            // load our map
+            me.game.currentLevel = level;
 
             // sort everything (recursively)
             targetContainer.sort(true);
@@ -158,15 +167,13 @@
             var container = options.container || me.game.world;
             var callback = options.callback || me.game.onLevelLoaded;
             var flatten = options.flatten || me.game.mergeGroup;
-            var level = levels[levelId];
-            
-            
+                        
             // throw an exception if not existing
-            if (typeof(level) === "undefined") {
+            if (typeof(levels[levelId]) === "undefined") {
                 throw new me.Error("level " + levelId + " not found");
             }
 
-            if (level instanceof me.TMXTileMap) {
+            if (levels[levelId] instanceof me.TMXTileMap) {
 
                 // check the status of the state mngr
                 var wasRunning = me.state.isRunning();
@@ -185,25 +192,18 @@
                     levels[api.getCurrentLevelId()].destroy();
                 }
 
-                // parse the give TMX file into the give level
-                me.mapReader.readMap(level, me.loader.getTMX(levelId));
-
-                // reset the GUID generator
-                // and pass the level id as parameter
-                me.utils.resetGUID(levelId, level.nextobjectid);
-
                 // update current level index
                 currentLevelIdx = levelIdx.indexOf(levelId);
 
                 // add the specified level to the game world
-                loadTMXLevel(level, container, flatten);
-
+                loadTMXLevel(levelId, container, flatten);
+                
                 //publish the corresponding message
-                me.event.publish(me.event.LEVEL_LOADED, [level.name]);
+                me.event.publish(me.event.LEVEL_LOADED, [levelId]);
                 
                 // fire the callback if defined
                 if (typeof (callback) === "function") {
-                    callback.call(callback, level.name);
+                    callback.call(callback, levelId);
                 }
 
                 if (wasRunning) {
