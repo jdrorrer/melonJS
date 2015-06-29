@@ -16,8 +16,9 @@
     "email": "contact@melonjs.org"
   },
   "engines": {
-    "node": ">= 0.8.0"
+    "node": ">= 0.10.0"
   },
+  "main": "build/melonJS.js",
   "dependencies": {},
   "devDependencies": {
     "grunt": "~0.4.5",

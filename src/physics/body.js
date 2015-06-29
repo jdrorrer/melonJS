@@ -156,8 +156,6 @@
             // call the super constructor
             this._super(
                 me.Rect,
-                // bounds the body by default
-                // to the parent entity
                 "init", [
                     0,
                     0,
@@ -183,8 +181,7 @@
          * @return {Number} the shape array length
          */
         addShape : function (shape, batchInsert) {
-            if (shape.shapeType === "Rectangle") {
-                // ensure that rect shape are managed as polygon
+            if (shape instanceof me.Rect) {
                 this.shapes.push(shape.toPolygon());
             } else {
                 // else polygon or circle
@@ -215,7 +212,7 @@
         addShapesFromJSON : function (json, id, scale) {
             var data;
             scale = scale || 1;
-            
+
             // identify the json format
             if (typeof(json.rigidBodies) === "undefined") {
                 // Physic Editor Format (https://www.codeandweb.com/physicseditor)
@@ -224,7 +221,7 @@
                 if (typeof(data) === "undefined") {
                     throw new me.Body.Error("Identifier (" + id + ") undefined for the given PhysicsEditor JSON object)");
                 }
-               
+
                 // go through all shapes and add them to the body
                 for (var i = 0; i < data.length; i++) {
                     var points = [];
@@ -241,15 +238,15 @@
                         // how to stop a forEach loop?
                     }
                 });
-                
+
                 if (typeof(data) === "undefined") {
                     throw new me.Body.Error("Identifier (" + id + ") undefined for the given PhysicsEditor JSON object)");
                 }
-                
+
                 // the shape origin point
                 // top-left origin in the editor is (0,1)
                 var origin = new me.Vector2d(data.origin.x, 1.0 - data.origin.y).scale(scale);
-                
+
                 var self = this;
                 // parse all polygons
                 data.polygons.forEach(function (poly) {
