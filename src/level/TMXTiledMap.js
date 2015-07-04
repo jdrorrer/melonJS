@@ -7,24 +7,206 @@
  * http://www.mapeditor.org/
  *
  */
-(function () {
+(function (TMXConstants) {
+
+    /**
+     * set a compatible renderer object
+     * for the specified map
+     * @ignore
+     */
+    function getNewDefaultRenderer(obj) {
+        switch (obj.orientation) {
+            case "orthogonal":
+                return new me.TMXOrthogonalRenderer(
+                    obj.cols,
+                    obj.rows,
+                    obj.tilewidth,
+                    obj.tileheight
+                );
+
+            case "isometric":
+                return new me.TMXIsometricRenderer(
+                    obj.cols,
+                    obj.rows,
+                    obj.tilewidth,
+                    obj.tileheight
+                );
+
+            case "hexagonal":
+                return new me.TMXHexagonalRenderer(
+                    obj.cols,
+                    obj.rows,
+                    obj.tilewidth,
+                    obj.tileheight,
+                    obj.hexsidelength,
+                    obj.staggeraxis,
+                    obj.staggerindex
+                );
+
+            // if none found, throw an exception
+            default:
+                throw new me.Error(obj.orientation + " type TMX Tile Map not supported!");
+        }
+    }
+
+    /**
+     * Set tiled layer Data
+     * @ignore
+     */
+    function setLayerData(layer, rawdata, encoding, compression) {
+        // data
+        var data = Array.isArray(rawdata) === true ? rawdata : rawdata.value;
+
+        // decode data based on encoding type
+        switch (encoding) {
+            case "json":
+                // do nothing as data can be directly reused
+                data = rawdata;
+                break;
+            // CSV encoding
+            case TMXConstants.TMX_TAG_CSV:
+            // Base 64 encoding
+            case TMXConstants.TMX_TAG_ATTR_BASE64:
+                // and then decode them
+                if (encoding === TMXConstants.TMX_TAG_CSV) {
+                    // CSV decode
+                    data = me.utils.decodeCSV(data, layer.cols);
+                } else {
+                    // check if data is compressed
+                    if (typeof compression === "string") {
+                        data = me.utils.decompress(data, compression);
+                    }
+                    // Base 64 decode
+                    data = me.utils.decodeBase64AsArray(data, 4);
+                }
+                break;
+
+
+            default:
+                throw new me.Error("TMX Tile Map " + encoding + " encoding not supported!");
+        }
+
+        var idx = 0;
+        // set everything
+        for (var y = 0 ; y < layer.rows; y++) {
+            for (var x = 0; x < layer.cols; x++) {
+                // get the value of the gid
+                var gid = (encoding == null) ? this.TMXParser.getIntAttribute(data[idx++], TMXConstants.TMX_TAG_GID) : data[idx++];
+                // fill the array
+                if (gid !== 0) {
+                    // add a new tile to the layer
+                    layer.setTile(x, y, gid);
+                }
+            }
+        }
+    }
+
+    /**
+     * read the layer Data
+     * @ignore
+     */
+    function readLayer(map, data, z) {
+        var layer = new me.TMXLayer(map.tilewidth, map.tileheight, map.orientation, map.tilesets, z);
+        // init the layer properly
+        layer.initFromJSON(data);
+        // set a renderer
+        if (!me.game.tmxRenderer.canRender(layer)) {
+            layer.setRenderer(getNewDefaultRenderer(layer));
+        }
+        else {
+            // use the default one
+            layer.setRenderer(me.game.tmxRenderer);
+        }
+        
+        // detect encoding and compression
+        var encoding = Array.isArray(data[TMXConstants.TMX_TAG_DATA]) ? data[TMXConstants.TMX_TAG_ENCODING] : data[TMXConstants.TMX_TAG_DATA][TMXConstants.TMX_TAG_ENCODING];
+        var compression = Array.isArray(data[TMXConstants.TMX_TAG_DATA]) ? data[TMXConstants.TMX_TAG_COMPRESSION] : data[TMXConstants.TMX_TAG_DATA][TMXConstants.TMX_TAG_COMPRESSION];
+        
+        // parse the layer data
+        setLayerData(layer, data[TMXConstants.TMX_TAG_DATA], encoding || "json", compression);
+        return layer;
+    }
+
+    /**
+     * read the Image Layer Data
+     * @ignore
+     */
+    function readImageLayer(map, data, z) {
+        // extract layer information
+        var ilx = +data[TMXConstants.TMX_TAG_X] || 0;
+        var ily = +data[TMXConstants.TMX_TAG_Y] || 0;
+        var iln = data[TMXConstants.TMX_TAG_NAME];
+        var ilw = +data[TMXConstants.TMX_TAG_WIDTH];
+        var ilh = +data[TMXConstants.TMX_TAG_HEIGHT];
+        var ilsrc = typeof (data[TMXConstants.TMX_TAG_IMAGE]) !== "string" ? data[TMXConstants.TMX_TAG_IMAGE].source : data[TMXConstants.TMX_TAG_IMAGE];
+
+        // create the layer
+        var imageLayer = new me.ImageLayer(
+            ilx, ily, {
+                width : ilw * map.tilewidth,
+                height: ilh * map.tileheight,
+                name: iln,
+                image: ilsrc,
+                z : z
+            }
+        );
+
+        // set some additional flags
+        var visible = typeof(data[TMXConstants.TMX_TAG_VISIBLE]) !== "undefined" ? data[TMXConstants.TMX_TAG_VISIBLE] : true;
+        imageLayer.setOpacity((visible === true) ? (+data[TMXConstants.TMX_TAG_OPACITY] || 1.0).clamp(0.0, 1.0) : 0);
+
+        // check if we have any additional properties
+        me.TMXUtils.applyTMXProperties(imageLayer, data);
+
+        // make sure ratio is a vector (backward compatibility)
+        if (typeof(imageLayer.ratio) === "number") {
+            var ratio = imageLayer.ratio;
+            imageLayer.ratio = new me.Vector2d(ratio, ratio);
+        }
+
+        return imageLayer;
+    }
+
+    /**
+     * read the tileset Data
+     * @ignore
+     */
+    function readTileset(data) {
+        return (new me.TMXTileset(data));
+    }
+
+    /**
+     * read the object group Data
+     * @ignore
+     */
+    function readObjectGroup(map, data, z) {
+        return (new me.TMXObjectGroup(data[TMXConstants.TMX_TAG_NAME], data, map.orientation, map.tilesets, z));
+    }
+
+
     /**
      * a TMX Tile Map Object
      * Tiled QT +0.7.x format
      * @class
-     * @extends me.Container
+     * @extends Object
      * @memberOf me
      * @constructor
      * @param {String} levelId name of TMX map
+     * @param {Object} data TMX map in JSON format
      */
-    me.TMXTileMap = me.Container.extend({
+    me.TMXTileMap = Object.extend({
         // constructor
-        init: function (levelId) {
-            // map id
-            this.levelId = levelId;
+        init: function (levelId, data) {
 
-            // map default z order
-            this.z = 0;
+            
+            /**
+             * default level position in the game world
+             * @ignore
+             * @type {me.Vector2d}
+             * @name pos
+             * @memberOf me.TMXTileMap
+             */
+            this.pos = new me.Vector2d(0 ,0);
 
             /**
              * name of the tilemap
@@ -32,7 +214,13 @@
              * @type String
              * @name me.TMXTileMap#name
              */
-            this.name = null;
+            this.name = levelId;
+
+            /** 
+             * the level data (JSON)
+             * @ignore
+             */
+            this.data = data;
 
             /**
              * width of the tilemap in tiles
@@ -40,15 +228,14 @@
              * @type Int
              * @name me.TMXTileMap#cols
              */
-            this.cols = 0;
-
+            this.cols = +data[TMXConstants.TMX_TAG_WIDTH];
             /**
              * height of the tilemap in tiles
              * @public
              * @type Int
              * @name me.TMXTileMap#rows
              */
-            this.rows = 0;
+            this.rows = +data[TMXConstants.TMX_TAG_HEIGHT];
 
             /**
              * Tile width
@@ -56,7 +243,7 @@
              * @type Int
              * @name me.TMXTileMap#tilewidth
              */
-            this.tilewidth = 0;
+            this.tilewidth = +data[TMXConstants.TMX_TAG_TILEWIDTH];
 
             /**
              * Tile height
@@ -64,70 +251,207 @@
              * @type Int
              * @name me.TMXTileMap#tileheight
              */
-            this.tileheight = 0;
+            this.tileheight = +data[TMXConstants.TMX_TAG_TILEHEIGHT];
 
-            // corresponding tileset for this map
+            // tilesets for this map
             this.tilesets = null;
+            // layers
+            this.layers = [];
+            // group objects
+            this.objectGroups = [];
             
             // tilemap version
-            this.version = "";
-
+            this.version = data[TMXConstants.TMX_TAG_VERSION];
+            
             // map type (orthogonal or isometric)
-            this.orientation = "";
+            this.orientation = data[TMXConstants.TMX_TAG_ORIENTATION];
+            if (this.orientation === "isometric") {
+                this.width = (this.cols + this.rows) * (this.tilewidth / 2);
+                this.height = (this.cols + this.rows) * (this.tileheight / 2);
+            } else {
+                this.width = this.cols * this.tilewidth;
+                this.height = this.rows * this.tileheight;
+            }
+            
 
-            // loading flag
-            this.initialized = false;
+            // objects minimum z order
+            this.z = 0;
 
-            this._super(me.Container, "init", [0, 0, 0, 0]);
+            // object id
+            this.nextobjectid = +data[TMXConstants.TMX_TAG_NEXTOBJID] || undefined;
+            
+
+            // hex/iso properties
+            this.hexsidelength = +data[TMXConstants.TMX_HEXSIDELENGTH];
+            this.staggeraxis = data[TMXConstants.TMX_STAGGERAXIS];
+            this.staggerindex = data[TMXConstants.TMX_STAGGERINDEX];
+            
+            // background color
+            this.backgroundcolor = data[TMXConstants.TMX_BACKGROUND_COLOR];
+            
+            // set additional map properties (if any)
+            me.TMXUtils.applyTMXProperties(this, data);
+
+            // initialize a default TMX renderer
+            if ((me.game.tmxRenderer === null) || !me.game.tmxRenderer.canRender(this)) {
+                me.game.tmxRenderer = getNewDefaultRenderer(this);
+            }
+
         },
 
         /**
-         * Add a child to the TMXTileMap <br>
-         * this function will only add an object reference, bypassing all activation events.
-         * @name addChild
-         * @memberOf me.TMXTileMap
-         * @function
-         * @param {me.Renderable} child
-         * @param {number} [z] forces the z index of the child to the specified value
-         * @return {me.Renderable} the added child
+         * parse the map
+         * @ignore
          */
-        addChild : function (child, z) {
-            // change the child z-index if one is specified
-            if (typeof(z) === "number") {
-                child.z = z;
+        readMapObjects: function (data) {
+
+            // to automatically increment z index
+            var zOrder = this.z;
+            var self = this;
+
+            // Tileset information
+            if (!this.tilesets) {
+                // make sure we have a TilesetGroup Object
+                this.tilesets = new me.TMXTilesetGroup();
             }
-            this.children.push(child);
-            return child;
+
+            // parse all tileset objects
+            var tilesets = data.tilesets || data.tileset;
+            if (Array.isArray(tilesets) === true) {
+                tilesets.forEach(function (tileset) {
+                    // add the new tileset
+                    self.tilesets.add(readTileset(tileset));
+                });
+            } else {
+                self.tilesets.add(readTileset(tilesets));
+            }
+
+            // check if a user-defined background color is defined
+            if (this.backgroundcolor) {
+                this.layers.push(
+                    new me.ColorLayer(
+                        "background_color",
+                        this.backgroundcolor,
+                        zOrder++
+                    )
+                );
+            }
+
+            // check if a background image is defined
+            if (this.background_image) {
+                // add a new image layer
+                this.layers.push(new me.ImageLayer(
+                    0, 0, {
+                        width : this.width,
+                        height : this.height,
+                        name : "background_image",
+                        image : this.background_image,
+                        z : zOrder++
+                    }
+                ));
+            }
+
+            // native JSON format
+            if (typeof (data.layers) !== "undefined") {
+                data.layers.forEach(function (layer) {
+                    switch (layer.type) {
+                        case TMXConstants.TMX_TAG_IMAGE_LAYER :
+                            self.layers.push(readImageLayer(self, layer, zOrder++));
+                            break;
+
+                        case TMXConstants.TMX_TAG_TILE_LAYER :
+                            self.layers.push(readLayer(self, layer, zOrder++));
+                            break;
+
+                        // get the object groups information
+                        case TMXConstants.TMX_TAG_OBJECTGROUP:
+                            self.objectGroups.push(readObjectGroup(self, layer, zOrder++));
+                            break;
+
+                        default:
+                            break;
+                    }
+                });
+            } else if (typeof (data.layer) !== "undefined") {
+                // converted XML format
+                // in converted format, these are not under the generic layers structure
+                // and each element can be either an array of object of just one object
+
+                var layers = data.layer;
+                if (Array.isArray(layers) === true) {
+                    layers.forEach(function (layer) {
+                        // get the object information
+                        self.layers.push(readLayer(self, layer, layer._draworder));
+                    });
+                }
+                else {
+                    // get the object information
+                    self.layers.push(readLayer(self, layers, layers._draworder));
+                }
+
+                // in converted format, these are not under the generic layers structure
+                if (typeof(data[TMXConstants.TMX_TAG_OBJECTGROUP]) !== "undefined") {
+                    var groups = data[TMXConstants.TMX_TAG_OBJECTGROUP];
+                    if (Array.isArray(groups) === true) {
+                        groups.forEach(function (group) {
+                            self.objectGroups.push(readObjectGroup(self, group, group._draworder));
+                        });
+                    }
+                    else {
+                        // get the object information
+                        self.objectGroups.push(readObjectGroup(self, groups, groups._draworder));
+                    }
+                }
+
+                // in converted format, these are not under the generic layers structure
+                if (typeof(data[TMXConstants.TMX_TAG_IMAGE_LAYER]) !== "undefined") {
+                    var imageLayers = data[TMXConstants.TMX_TAG_IMAGE_LAYER];
+                    if (Array.isArray(imageLayers) === true) {
+                        imageLayers.forEach(function (imageLayer) {
+                            self.layers.push(readImageLayer(self, imageLayer, imageLayer._draworder));
+                        });
+                    }
+                    else {
+                        self.layers.push(readImageLayer(self, imageLayers, imageLayers._draworder));
+                    }
+                }
+            }
         },
+
         
         /**
-         * Removes a child from a TMXTileMap object
-         * @name removeChildNow
-         * @memberOf me.TMXTileMap
-         * @function
-         * @param {me.Renderable} child
-         */
-        removeChildNow : function (child) {
-            child.ancestor = undefined;
-
-            if (typeof child.onDeactivateEvent === "function") {
-                 child.onDeactivateEvent();
-            }
-            if (typeof (child.destroy) === "function") {
-                child.destroy();
-            }
-            this.children.splice(this.getChildIndex(child), 1);
-        },
-        
-        /**
-         * return all the existing object group definition
-         * @name me.TMXTileMap#getObjectGroups
+         * add all the map layers and objects to the given container
+         * @name me.TMXTileMap#addTo
          * @public
          * @function
-         * @return {me.TMXObjectGroup[]} Array of Groups
+         * @param {me.Container} target container
+         * @param {boolean} flatten if true, flatten all objects into the given container
+         */
+        addTo : function (container, flatten) {
+            
+            // re-read the TMX
+            this.readMapObjects(this.data);
+
+            // add all layers instances
+            this.getLayers().forEach(function (layer) {
+                container.addChild(layer);
+            });
+            
+            // add all Object instances
+            this.getObjects(flatten).forEach(function (object) {
+                container.addChild(object);
+            });
+        },
+
+        /**
+         * return all the existing object groups
+         * @name me.TMXTileMap#getLayers
+         * @public
+         * @function
+         * @return {me.TMXLayer[]} Array of Layers
          */
         getObjectGroups : function () {
-            return this.getChildByType(me.TMXObjectGroup);
+            return this.objectGroups;
         },
 
         /**
@@ -149,7 +473,7 @@
                 var group = objectGroups[g];
 
                 // check if this is the collision shape group
-                isCollisionGroup = group.name.toLowerCase().contains(me.TMXConstants.COLLISION_GROUP);
+                isCollisionGroup = group.name.toLowerCase().contains(TMXConstants.COLLISION_GROUP);
                
                 if (flatten === false) {
                     // create a new container with Infinite size (?)
@@ -239,7 +563,7 @@
          * @return {me.TMXLayer[]} Array of Layers
          */
         getLayers : function () {
-            return this.getChildByType(me.TMXLayer).concat(this.getChildByType(me.ImageLayer)).concat(this.getChildByType(me.ColorLayer));
+            return this.layers;
         },
 
         /**
@@ -264,35 +588,21 @@
         },
 
         /**
-         * clear the tile at the specified position from all layers
-         * @name me.TMXTileMap#clearTile
-         * @public
-         * @function
-         * @param {Number} x x position
-         * @param {Number} y y position
+         * reset function
+         * @ignore
          */
-        clearTile : function (x, y) {
-            var layers = this.getChildByType(me.TMXLayer);
-            // add all layers
-            for (var i = layers.length; i--;) {
-                // that are visible
-                layers[i].clearTile(x, y);
-            }
+        reset : function () {
+            this.pos.set(0, 0);
         },
 
-        /**
+                /**
          * destroy function, clean all allocated objects
          * @ignore
          */
         destroy : function () {
-            if (this.initialized === true) {
-                // call parent reset function
-                this._super(me.Container, "destroy");
-                // reset other stuff
-                this.tilesets = null;
-                this.pos.set(0, 0);
-                this.initialized = false;
-            }
+            this.tilesets = undefined;
+            this.layers = [];
+            this.objectGroups = [];
         }
     });
-})();
+})(me.TMXConstants);

@@ -40,15 +40,10 @@
          */
         var loadTMXLevel = function (levelId, container, flatten) {
             var level = levels[levelId];
-            var targetContainer = container; 
             
             // disable auto-sort for the given container
-            targetContainer.autoSort = false;
-            
-                
-            // parse the give TMX file into the give level
-            me.mapReader.readMap(level, me.loader.getTMX(levelId));
-            
+            container.autoSort = false;
+                        
             // change the viewport bounds
             me.game.viewport.setBounds(
                 0, 0,
@@ -60,33 +55,27 @@
             // and pass the level id as parameter
             me.utils.resetGUID(levelId, level.nextobjectid);
             
-            // add all layers instances
-            level.getLayers().forEach(function (layer) {
-                targetContainer.addChild(layer);
-            });
-            
-            // add all Object instances
-            level.getObjects(flatten).forEach(function (object) {
-                targetContainer.addChild(object);
-            });
-            
+            // add all level elements to the target container
+            level.reset();
+            level.addTo(container, flatten);
+
             // load our map
             me.game.currentLevel = level;
 
             // sort everything (recursively)
-            targetContainer.sort(true);
+            container.sort(true);
 
             // re-enable auto-sort
-            targetContainer.autoSort = true;
+            container.autoSort = true;
 
             // center map on the viewport
             level.moveToCenter();
 
             // translate the display if required
-            targetContainer.transform.translateV(level.pos);
+            container.transform.translateV(level.pos);
 
             // update the game world size to match the level size
-            targetContainer.resize(level.width, level.height);
+            container.resize(level.width, level.height);
         };
 
         /*
@@ -115,9 +104,7 @@
             // just load the level with the XML stuff
             if (levels[levelId] == null) {
                 //console.log("loading "+ levelId);
-                levels[levelId] = new me.TMXTileMap(levelId);
-                // set the name of the level
-                levels[levelId].name = levelId;
+                levels[levelId] = new me.TMXTileMap(levelId, me.loader.getTMX(levelId));
                 // level index
                 levelIdx.push(levelId);
             }
